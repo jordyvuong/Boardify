@@ -28,8 +28,23 @@
       <div class="lists-container">
         <div v-for="list in boardsStore.lists" :key="list.id" class="list">
           <div class="list-header">
-            <h2 class="list-title">{{ list.title }}</h2>
-            <button class="list-menu-btn" @click="showListMenu(list.id)">•••</button>
+            <!-- Zone du titre avec édition conditionnelle -->
+            <div class="list-title-container">
+              <h2 v-if="!isEditing || editingListId !== list.id" class="list-title">
+                {{ list.title }}
+              </h2>
+              <input
+                v-else
+                type="text"
+                v-model="editedTitle"
+                @keyup.enter="saveListTitle"
+                @keyup.esc="cancelEditingList"
+                @blur="saveListTitle"
+                class="list-title-input"
+                ref="titleInput"
+              />
+            </div>
+            <button class="list-menu-btn" @click.stop="showListMenu(list.id, $event)">•••</button>
           </div>
 
           <div class="cards-container">
@@ -71,7 +86,7 @@
 
         <!-- Ajouter une nouvelle liste -->
         <div class="add-list">
-          <button v-if="!showNewListForm" class="add-list-btn" @click="showNewListForm = true">
+          <button v-if="!showNewListForm" class="add-list-btn" @click="beginAddList">
             + Ajouter une liste
           </button>
 
@@ -81,6 +96,7 @@
               v-model="newListTitle"
               placeholder="Titre de la liste"
               ref="newListInput"
+              id="newListInput"
               @keyup.enter="createNewList"
               @keyup.esc="cancelNewList"
             />
@@ -92,6 +108,38 @@
               <button class="cancel-btn" @click="cancelNewList">Annuler</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu contextuel des listes -->
+    <div v-if="showListMenuPopup" class="list-menu" :style="listMenuPosition">
+      <button class="menu-item" @click="editListTitle">
+        <span class="menu-icon">✏️</span> Modifier le titre
+      </button>
+      <button class="menu-item danger" @click="confirmDeleteList">
+        <span class="menu-icon">🗑️</span> Supprimer la liste
+      </button>
+    </div>
+
+    <!-- Modal de confirmation de suppression -->
+    <div
+      v-if="showDeleteConfirmation"
+      class="modal-overlay"
+      @click.self="showDeleteConfirmation = false"
+    >
+      <div class="modal-content">
+        <h2>Supprimer la liste</h2>
+        <p>Êtes-vous sûr de vouloir supprimer cette liste ?</p>
+        <p class="warning-text">
+          Toutes les cartes qu'elle contient seront aussi supprimées. Cette action est irréversible.
+        </p>
+
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="showDeleteConfirmation = false">Annuler</button>
+          <button class="delete-btn" @click="deleteList" :disabled="isDeleting">
+            {{ isDeleting ? 'Suppression...' : 'Supprimer' }}
+          </button>
         </div>
       </div>
     </div>
@@ -237,7 +285,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBoardsStore } from '@/stores/boards'
 import { getLighterColor } from '@/utils/colors'
@@ -253,6 +301,16 @@ const newListTitle = ref('')
 const showCardForm = ref(false)
 const activeListId = ref(null)
 const selectedCard = ref(null)
+
+// Variables pour la gestion du menu et de l'édition des listes
+const selectedListId = ref(null)
+const showListMenuPopup = ref(false)
+const listMenuPosition = ref({})
+const isEditing = ref(false)
+const editingListId = ref(null)
+const editedTitle = ref('')
+const showDeleteConfirmation = ref(false)
+const isDeleting = ref(false)
 
 // Nouveau modèle de carte
 const newCard = ref({
@@ -287,6 +345,9 @@ onMounted(async () => {
     }
 
     await boardsStore.loadBoard(boardId)
+
+    // Ajouter un écouteur pour fermer le menu des listes en cliquant ailleurs
+    document.addEventListener('click', closeListMenuOnClickOutside)
   } catch (e) {
     error.value = e.message
     console.error('Error loading board:', e)
@@ -294,6 +355,16 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+// Nettoyer l'écouteur lors de la destruction du composant
+onUnmounted(() => {
+  document.removeEventListener('click', closeListMenuOnClickOutside)
+})
+
+// Fermer le menu des listes en cliquant ailleurs
+const closeListMenuOnClickOutside = () => {
+  showListMenuPopup.value = false
+}
 
 // Filtrer les cartes par liste
 const getCardsForList = (listId) => {
@@ -339,6 +410,17 @@ const goBack = () => {
   router.push('/boards')
 }
 
+// Commencer l'ajout d'une liste
+const beginAddList = () => {
+  showNewListForm.value = true
+
+  // Focus sur le champ d'entrée après le rendu
+  setTimeout(() => {
+    const input = document.getElementById('newListInput')
+    if (input) input.focus()
+  }, 50)
+}
+
 // Créer une nouvelle liste
 const createNewList = async () => {
   if (!newListTitle.value.trim()) return
@@ -346,6 +428,7 @@ const createNewList = async () => {
   try {
     await boardsStore.createList({
       title: newListTitle.value.trim(),
+      boardId: boardsStore.currentBoard.id,
     })
 
     // Réinitialiser le formulaire
@@ -361,6 +444,103 @@ const createNewList = async () => {
 const cancelNewList = () => {
   newListTitle.value = ''
   showNewListForm.value = false
+}
+
+// Afficher le menu d'une liste
+const showListMenu = (listId, event) => {
+  // Empêcher la propagation pour ne pas déclencher l'event listener du document immédiatement
+  event.stopPropagation()
+
+  // Fermer le menu s'il est déjà ouvert pour cette liste
+  if (showListMenuPopup.value && selectedListId.value === listId) {
+    showListMenuPopup.value = false
+    return
+  }
+
+  // Stocker l'ID de la liste sélectionnée
+  selectedListId.value = listId
+
+  // Calculer la position du menu
+  const button = event.target
+  const rect = button.getBoundingClientRect()
+
+  listMenuPosition.value = {
+    top: `${rect.bottom}px`,
+    left: `${rect.left}px`,
+  }
+
+  // Afficher le menu
+  showListMenuPopup.value = true
+}
+
+// Éditer le titre d'une liste
+const editListTitle = () => {
+  // Trouver la liste à éditer
+  const list = boardsStore.lists.find((l) => l.id === selectedListId.value)
+  if (!list) return
+
+  // Initialiser l'édition
+  editingListId.value = selectedListId.value
+  editedTitle.value = list.title
+  isEditing.value = true
+
+  // Fermer le menu
+  showListMenuPopup.value = false
+
+  // Focus sur l'input
+  nextTick(() => {
+    const input = document.querySelector('.list-title-input')
+    if (input) input.focus()
+  })
+}
+
+// Enregistrer le nouveau titre
+const saveListTitle = async () => {
+  if (!editedTitle.value.trim()) {
+    cancelEditingList()
+    return
+  }
+
+  try {
+    await boardsStore.updateList(editingListId.value, {
+      title: editedTitle.value.trim(),
+    })
+
+    // Fin de l'édition
+    isEditing.value = false
+    editingListId.value = null
+  } catch (e) {
+    error.value = 'Erreur lors de la modification du titre'
+    console.error('Error updating list title:', e)
+  }
+}
+
+// Annuler l'édition du titre
+const cancelEditingList = () => {
+  isEditing.value = false
+  editingListId.value = null
+}
+
+// Demander confirmation pour la suppression
+const confirmDeleteList = () => {
+  showListMenuPopup.value = false
+  showDeleteConfirmation.value = true
+}
+
+// Supprimer la liste
+const deleteList = async () => {
+  if (!selectedListId.value) return
+
+  try {
+    isDeleting.value = true
+    await boardsStore.deleteList(selectedListId.value)
+    showDeleteConfirmation.value = false
+  } catch (e) {
+    error.value = 'Erreur lors de la suppression de la liste'
+    console.error('Error deleting list:', e)
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 // Afficher le formulaire d'ajout de carte
@@ -459,12 +639,6 @@ const deleteSelectedCard = async () => {
     }
   }
 }
-
-// Afficher le menu d'une liste
-const showListMenu = (listId) => {
-  // Fonctionnalité à implémenter si besoin
-  console.log('Show menu for list:', listId)
-}
 </script>
 
 <style scoped>
@@ -545,11 +719,28 @@ const showListMenu = (listId) => {
   align-items: center;
 }
 
+.list-title-container {
+  flex-grow: 1;
+  overflow: hidden;
+}
+
 .list-title {
   font-size: 1rem;
   font-weight: 600;
   margin: 0;
-  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-title-input {
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border: 2px solid #0079bf;
+  border-radius: 3px;
+  margin: -0.25rem 0;
 }
 
 .list-menu-btn {
@@ -564,6 +755,51 @@ const showListMenu = (listId) => {
 
 .list-menu-btn:hover {
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Menu contextuel des listes */
+.list-menu {
+  position: absolute;
+  z-index: 100;
+  background-color: white;
+  border-radius: 3px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #172b4d;
+}
+
+.menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.menu-item.danger {
+  color: #eb5a46;
+}
+
+.menu-item.danger:hover {
+  background-color: #ffedeb;
+}
+
+.menu-icon {
+  margin-right: 0.5rem;
+}
+
+.warning-text {
+  color: #eb5a46;
+  font-weight: 500;
+  margin-bottom: 1rem;
 }
 
 .cards-container {
@@ -893,6 +1129,11 @@ const showListMenu = (listId) => {
 
 .delete-btn:hover {
   background-color: #cf513d;
+}
+
+.delete-btn:disabled {
+  background-color: #f3afa5;
+  cursor: not-allowed;
 }
 
 /* Loading */
