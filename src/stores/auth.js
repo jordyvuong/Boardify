@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { auth } from '../firebase'
+import { auth } from '@/firebase'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const loading = ref(true)
   const error = ref(null)
+  const authReady = ref(false) // Nouvel état pour indiquer quand la vérification Auth est terminée
 
   // Initialiser l'état de l'authentification
   const init = () => {
@@ -26,8 +27,12 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = null
       }
       loading.value = false
+      authReady.value = true // Marquer l'authentification comme prête
     })
   }
+
+  // Appeler init() immédiatement pour configurer l'écouteur d'événements
+  init()
 
   // Inscription
   const register = async (email, password) => {
@@ -72,5 +77,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, loading, error, init, register, login, logout }
+  return { user, loading, error, authReady, init, register, login, logout }
 })
