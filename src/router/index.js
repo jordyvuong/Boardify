@@ -5,6 +5,7 @@ import RegisterView from '@/views/RegisterView.vue'
 import BoardsView from '@/views/BoardsView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { watch } from 'vue'
+import BoardView from '@/views/BoardView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,7 +34,7 @@ const router = createRouter({
     {
       path: '/boards/:id',
       name: 'board',
-      component: () => import('../views/BoardView.vue'),
+      component: BoardView,
       meta: { requiresAuth: true },
     },
   ],
