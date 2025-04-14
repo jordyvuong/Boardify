@@ -27,12 +27,17 @@
         :key="board.id"
         class="board-card"
         :style="{ backgroundColor: board.backgroundColor || '#0079BF' }"
-        @click="navigateToBoard(board.id)"
       >
-        <h2 class="board-title">{{ board.title }}</h2>
-        <p class="board-description">{{ board.description }}</p>
-        <div class="board-footer">
-          <span class="created-at">Créé le {{ formatDate(board.createdAt) }}</span>
+        <!-- Bouton menu pour chaque tableau -->
+        <button class="board-menu-btn" @click.stop="openBoardMenu(board, $event)">⋮</button>
+
+        <!-- Contenu du tableau -->
+        <div class="board-content" @click="navigateToBoard(board.id)">
+          <h2 class="board-title">{{ board.title }}</h2>
+          <p class="board-description">{{ board.description }}</p>
+          <div class="board-footer">
+            <span class="created-at">Créé le {{ formatDate(board.createdAt) }}</span>
+          </div>
         </div>
       </div>
 
@@ -104,11 +109,104 @@
         </form>
       </div>
     </div>
+
+    <!-- Modal de modification de tableau -->
+    <div v-if="showEditBoardModal" class="modal-overlay" @click.self="showEditBoardModal = false">
+      <div class="modal-content">
+        <h2>Modifier le tableau</h2>
+
+        <div v-if="error" class="error-message">
+          {{ error }}
+        </div>
+
+        <form @submit.prevent="updateBoardDetails">
+          <div class="form-group">
+            <label for="editBoardTitle">Titre</label>
+            <input
+              type="text"
+              id="editBoardTitle"
+              v-model="editBoardData.title"
+              required
+              placeholder="Titre du tableau"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="editBoardDescription">Description (optionnel)</label>
+            <textarea
+              id="editBoardDescription"
+              v-model="editBoardData.description"
+              placeholder="Description du tableau"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Couleur</label>
+            <div class="color-picker">
+              <div
+                v-for="color in backgroundColors"
+                :key="color"
+                class="color-option"
+                :style="{ backgroundColor: color }"
+                :class="{ selected: editBoardData.backgroundColor === color }"
+                @click="editBoardData.backgroundColor = color"
+              ></div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" @click="showEditBoardModal = false">
+              Annuler
+            </button>
+            <button type="submit" class="create-btn" :disabled="isUpdating || !editBoardData.title">
+              {{ isUpdating ? 'Mise à jour...' : 'Enregistrer' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de suppression -->
+    <div
+      v-if="showDeleteBoardModal"
+      class="modal-overlay"
+      @click.self="showDeleteBoardModal = false"
+    >
+      <div class="modal-content">
+        <h2>Supprimer le tableau</h2>
+        <p>Êtes-vous sûr de vouloir supprimer le tableau "{{ boardToDelete?.title }}" ?</p>
+        <p class="warning-text">
+          Cette action est irréversible et supprimera toutes les listes et cartes associées.
+        </p>
+
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="showDeleteBoardModal = false">Annuler</button>
+          <button class="delete-btn" @click="confirmDeleteBoard" :disabled="deletingBoard">
+            {{ deletingBoard ? 'Suppression...' : 'Supprimer' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu contextuel pour les tableaux -->
+    <div
+      v-if="boardMenuPosition.visible"
+      class="board-context-menu"
+      :style="boardMenuPosition.style"
+    >
+      <button @click="openEditBoardModal(selectedBoard)" class="menu-item">
+        <span class="menu-icon">✏️</span> Modifier
+      </button>
+      <button @click="promptDeleteBoard(selectedBoard)" class="menu-item danger">
+        <span class="menu-icon">🗑️</span> Supprimer
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBoardsStore } from '@/stores/boards'
 import { useAuthStore } from '@/stores/auth'
@@ -121,6 +219,23 @@ const loading = ref(true)
 const error = ref('')
 const showCreateBoardModal = ref(false)
 const isCreating = ref(false)
+
+// Refs pour la gestion de la suppression
+const showDeleteBoardModal = ref(false)
+const boardToDelete = ref(null)
+const deletingBoard = ref(false)
+const selectedBoard = ref(null)
+const boardMenuPosition = ref({ visible: false, style: {} })
+
+// Refs pour l'édition du tableau
+const showEditBoardModal = ref(false)
+const editBoardData = ref({
+  id: null,
+  title: '',
+  description: '',
+  backgroundColor: '',
+})
+const isUpdating = ref(false)
 
 // Couleurs de fond prédéfinies pour les tableaux
 const backgroundColors = [
@@ -159,12 +274,18 @@ const loadBoardsIfAuthenticated = async () => {
   }
 }
 
-// Charger les tableaux au montage du composant
-onMounted(async () => {
+// Fermer le menu contextuel en cliquant ailleurs
+onMounted(() => {
+  document.addEventListener('click', closeMenus)
+
   // Attendre que authStore.authReady soit true avant de continuer
   if (authStore.authReady) {
     loadBoardsIfAuthenticated()
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeMenus)
 })
 
 // Surveiller les changements de l'état d'authentification
@@ -188,13 +309,33 @@ const formatDate = (timestamp) => {
   }).format(date)
 }
 
+// Fonction pour fermer tous les menus
+const closeMenus = () => {
+  boardMenuPosition.value.visible = false
+}
+
+// Ouvrir le menu du tableau
+const openBoardMenu = (board, event) => {
+  event.stopPropagation()
+  selectedBoard.value = board
+
+  // Positionner le menu près du bouton
+  const rect = event.target.getBoundingClientRect()
+  boardMenuPosition.value = {
+    visible: true,
+    style: {
+      top: `${rect.bottom + window.scrollY}px`,
+      left: `${rect.left + window.scrollX}px`,
+    },
+  }
+}
+
 // Naviguer vers un tableau
 const navigateToBoard = (boardId) => {
   router.push(`/boards/${boardId}`)
 }
 
 // Créer un nouveau tableau
-// À ajouter dans le <script setup> de BoardsView.vue
 const createBoard = async () => {
   if (!newBoard.value.title.trim()) {
     error.value = 'Le titre du tableau est requis'
@@ -229,6 +370,71 @@ const createBoard = async () => {
     console.error('Error creating board:', e)
   } finally {
     isCreating.value = false
+  }
+}
+
+// Fonction pour demander la suppression d'un tableau
+const promptDeleteBoard = (board) => {
+  boardToDelete.value = board
+  showDeleteBoardModal.value = true
+  boardMenuPosition.value.visible = false
+}
+
+// Fonction pour confirmer la suppression
+const confirmDeleteBoard = async () => {
+  if (!boardToDelete.value) return
+
+  try {
+    deletingBoard.value = true
+    await boardsStore.deleteBoard(boardToDelete.value.id)
+    showDeleteBoardModal.value = false
+  } catch (e) {
+    error.value = 'Erreur lors de la suppression du tableau'
+    console.error('Error deleting board:', e)
+  } finally {
+    deletingBoard.value = false
+  }
+}
+
+// Fonction pour ouvrir le modal d'édition de tableau
+const openEditBoardModal = (board) => {
+  boardMenuPosition.value.visible = false
+
+  // Copier les propriétés du tableau dans le formulaire d'édition
+  editBoardData.value = {
+    id: board.id,
+    title: board.title || '',
+    description: board.description || '',
+    backgroundColor: board.backgroundColor || backgroundColors[0],
+  }
+
+  showEditBoardModal.value = true
+}
+
+// Fonction pour mettre à jour les détails d'un tableau
+const updateBoardDetails = async () => {
+  if (!editBoardData.value.title.trim()) {
+    error.value = 'Le titre du tableau est requis'
+    return
+  }
+
+  try {
+    isUpdating.value = true
+    error.value = ''
+
+    const boardData = {
+      title: editBoardData.value.title.trim(),
+      description: editBoardData.value.description.trim(),
+      backgroundColor: editBoardData.value.backgroundColor,
+    }
+
+    await boardsStore.updateBoard(editBoardData.value.id, boardData)
+    showEditBoardModal.value = false
+  } catch (e) {
+    error.value = 'Erreur lors de la modification du tableau'
+    console.error('Error updating board:', e)
+  } finally {
+    isUpdating.value = false
   }
 }
 </script>
@@ -297,6 +503,37 @@ const createBoard = async () => {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+/* Nouveau style pour le menu du tableau */
+.board-menu-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.board-menu-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.board-content {
+  height: 100%;
+  width: 100%;
+}
+
 .board-title {
   font-size: 1.2rem;
   font-weight: 600;
@@ -345,6 +582,43 @@ const createBoard = async () => {
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 0.5rem;
+}
+
+/* Menu contextuel */
+.board-context-menu {
+  position: absolute;
+  background: white;
+  border-radius: 3px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  min-width: 150px;
+  z-index: 1000;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background-color: #f4f5f7;
+}
+
+.menu-item.danger {
+  color: #c62828;
+}
+
+.menu-item.danger:hover {
+  background-color: #ffebee;
+}
+
+.menu-icon {
+  margin-right: 8px;
 }
 
 /* États de chargement et vide */
@@ -506,6 +780,30 @@ const createBoard = async () => {
   padding: 0.75rem;
   border-radius: 3px;
   margin-bottom: 1rem;
+}
+
+.warning-text {
+  color: #c62828;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.delete-btn {
+  background-color: #eb5a46;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background-color: #cf513d;
+}
+
+.delete-btn:disabled {
+  background-color: #f3afa5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

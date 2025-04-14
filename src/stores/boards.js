@@ -334,6 +334,178 @@ export const useBoardsStore = defineStore('boards', () => {
     }
   }
 
+  // Supprimer un tableau
+  const deleteBoard = async (boardId) => {
+    if (!authStore.user) throw new Error('User not authenticated')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      // 1. Récupérer les listes de ce tableau pour les supprimer aussi
+      const listsRef = dbRef(db, 'lists')
+      const listsQuery = query(listsRef, orderByChild('boardId'), equalTo(boardId))
+      const listsSnapshot = await get(listsQuery)
+
+      // 2. Récupérer les cartes pour les supprimer
+      const cardsRef = dbRef(db, 'cards')
+      const cardsQuery = query(cardsRef, orderByChild('boardId'), equalTo(boardId))
+      const cardsSnapshot = await get(cardsQuery)
+
+      // Utiliser une transaction pour tout supprimer de manière atomique
+      const updates = {}
+
+      // Supprimer toutes les cartes de ce tableau
+      if (cardsSnapshot.exists()) {
+        cardsSnapshot.forEach((cardSnap) => {
+          updates[`cards/${cardSnap.key}`] = null
+        })
+      }
+
+      // Supprimer toutes les listes de ce tableau
+      if (listsSnapshot.exists()) {
+        listsSnapshot.forEach((listSnap) => {
+          updates[`lists/${listSnap.key}`] = null
+        })
+      }
+
+      // Supprimer la référence dans userBoards si elle existe
+      if (authStore.user.uid) {
+        updates[`userBoards/${authStore.user.uid}/${boardId}`] = null
+      }
+
+      // Supprimer le tableau lui-même
+      updates[`boards/${boardId}`] = null
+
+      // Effectuer toutes les suppressions en une seule opération
+      await update(dbRef(db), updates)
+
+      // Mettre à jour l'état local
+      boards.value = boards.value.filter((board) => board.id !== boardId)
+
+      return true
+    } catch (e) {
+      console.error('Error deleting board:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Supprimer une liste
+  const deleteList = async (listId) => {
+    if (!authStore.user || !currentBoard.value)
+      throw new Error('User not authenticated or no board loaded')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      // 1. Récupérer toutes les cartes de cette liste
+      const cardsRef = dbRef(db, 'cards')
+      const cardsQuery = query(cardsRef, orderByChild('listId'), equalTo(listId))
+      const cardsSnapshot = await get(cardsQuery)
+
+      // Utiliser une transaction pour tout supprimer de manière atomique
+      const updates = {}
+
+      // Supprimer toutes les cartes de cette liste
+      if (cardsSnapshot.exists()) {
+        cardsSnapshot.forEach((cardSnap) => {
+          updates[`cards/${cardSnap.key}`] = null
+        })
+      }
+
+      // Supprimer la liste elle-même
+      updates[`lists/${listId}`] = null
+
+      // Effectuer toutes les suppressions en une seule opération
+      await update(dbRef(db), updates)
+
+      // Mettre à jour l'état local
+      lists.value = lists.value.filter((list) => list.id !== listId)
+      cards.value = cards.value.filter((card) => card.listId !== listId)
+
+      return true
+    } catch (e) {
+      console.error('Error deleting list:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Mettre à jour un tableau
+  const updateBoard = async (boardId, boardData) => {
+    if (!authStore.user) throw new Error('User not authenticated')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      const boardRef = dbRef(db, `boards/${boardId}`)
+      await update(boardRef, boardData)
+
+      // Mettre à jour localement
+      const boardIndex = boards.value.findIndex((b) => b.id === boardId)
+      if (boardIndex !== -1) {
+        boards.value[boardIndex] = {
+          ...boards.value[boardIndex],
+          ...boardData,
+        }
+      }
+
+      // Si c'est le tableau actuellement affiché, mettre à jour currentBoard aussi
+      if (currentBoard.value && currentBoard.value.id === boardId) {
+        currentBoard.value = {
+          ...currentBoard.value,
+          ...boardData,
+        }
+      }
+
+      return true
+    } catch (e) {
+      console.error('Error updating board:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Mettre à jour une liste
+  const updateList = async (listId, listData) => {
+    if (!authStore.user || !currentBoard.value)
+      throw new Error('User not authenticated or no board loaded')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      const listRef = dbRef(db, `lists/${listId}`)
+      await update(listRef, listData)
+
+      // Mettre à jour localement
+      const listIndex = lists.value.findIndex((l) => l.id === listId)
+      if (listIndex !== -1) {
+        lists.value[listIndex] = {
+          ...lists.value[listIndex],
+          ...listData,
+        }
+      }
+
+      return true
+    } catch (e) {
+      console.error('Error updating list:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     boards,
     currentBoard,
@@ -349,5 +521,9 @@ export const useBoardsStore = defineStore('boards', () => {
     updateCard,
     moveCard,
     deleteCard,
+    deleteBoard,
+    deleteList,
+    updateBoard,
+    updateList,
   }
 })
