@@ -34,7 +34,6 @@ export const useBoardsStore = defineStore('boards', () => {
       error.value = null
       console.log('Loading boards for user:', authStore.user.uid)
 
-      // Option 1: Utiliser une query sur les membres (recommandé)
       const boardsRef = dbRef(db, 'boards')
       const snapshot = await get(boardsRef)
       const boardsList = []

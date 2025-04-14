@@ -177,7 +177,6 @@ watch(
   },
 )
 
-// Formater la date pour l'affichage
 const formatDate = (timestamp) => {
   if (!timestamp) return ''
 

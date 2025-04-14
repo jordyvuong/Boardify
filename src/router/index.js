@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import { auth } from '../firebase'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import BoardsView from '@/views/BoardsView.vue'
+import { useAuthStore } from '@/stores/auth'
+import { watch } from 'vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -27,6 +28,7 @@ const router = createRouter({
       path: '/boards',
       name: 'boards',
       component: BoardsView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/boards/:id',
@@ -37,12 +39,28 @@ const router = createRouter({
   ],
 })
 
-// Navigation guard pour vérifier l'authentification
-router.beforeEach((to, from, next) => {
+// Navigation guard amélioré
+router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
-  const isAuthenticated = auth.currentUser
+  const authStore = useAuthStore()
 
-  if (requiresAuth && !isAuthenticated) {
+  // Attendre que l'authentification soit prête
+  if (!authStore.authReady) {
+    await new Promise((resolve) => {
+      const unwatch = watch(
+        () => authStore.authReady,
+        (ready) => {
+          if (ready) {
+            unwatch()
+            resolve()
+          }
+        },
+      )
+    })
+  }
+
+  // Maintenant que authReady est vrai, on peut vérifier l'utilisateur
+  if (requiresAuth && !authStore.user) {
     next('/login')
   } else {
     next()

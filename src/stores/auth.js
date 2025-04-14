@@ -31,9 +31,6 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
-  // Appeler init() immédiatement pour configurer l'écouteur d'événements
-  init()
-
   // Inscription
   const register = async (email, password) => {
     try {
