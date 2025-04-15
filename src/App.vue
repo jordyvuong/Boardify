@@ -56,11 +56,13 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import { searchItems } from './stores/boards'  // Importer la fonction de recherche
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const searchQuery = ref('')
+const results = ref([]);
 
 // Initialiser l'état d'authentification au chargement de l'app
 onMounted(() => {
@@ -102,10 +104,13 @@ const handleSearch = (event) => {
 
 // Vider la recherche quand on change de route
 watch(
-  () => route.name,
-  () => {
-    searchQuery.value = ''
-  },
+  () => route.query.q,
+  async (newQuery) => {
+    if (newQuery) {
+      searchQuery.value = newQuery;
+      results.value = await searchItems(newQuery);  // Appeler searchItems pour mettre à jour les résultats
+    }
+  }
 )
 </script>
 
