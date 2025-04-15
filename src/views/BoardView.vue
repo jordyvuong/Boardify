@@ -25,8 +25,17 @@
     </div>
 
     <div v-else class="board-content">
-      <div class="lists-container">
-        <div v-for="list in boardsStore.lists" :key="list.id" class="list">
+      <div class="lists-container" @dragover.prevent>
+        <div 
+          v-for="list in boardsStore.lists" 
+          :key="list.id" 
+          class="list"
+          draggable="true"
+          @dragstart="startDraggingList($event, list)"
+          @dragover.prevent
+          @drop="dropOnList($event, list)"
+          @dragend="endDragging"
+        >
           <div class="list-header">
             <!-- Zone du titre avec édition conditionnelle -->
             <div class="list-title-container">
@@ -47,11 +56,18 @@
             <button class="list-menu-btn" @click.stop="showListMenu(list.id, $event)">•••</button>
           </div>
 
-          <div class="cards-container">
+          <div 
+            class="cards-container"
+            @dragover.prevent="onCardDragOver($event, list.id)"
+            @drop="dropCardOnList($event, list.id)"
+          >
             <div
               v-for="card in getCardsForList(list.id)"
               :key="card.id"
               class="card"
+              draggable="true"
+              @dragstart="startDraggingCard($event, card)"
+              @dragend="endDragging"
               @click="openCardDetails(card)"
             >
               <div v-if="card.labels && Object.keys(card.labels).length > 0" class="card-labels">
@@ -311,6 +327,13 @@ const editingListId = ref(null)
 const editedTitle = ref('')
 const showDeleteConfirmation = ref(false)
 const isDeleting = ref(false)
+
+// Variables pour le drag and drop
+const draggedListId = ref(null)
+const draggedCardId = ref(null)
+const dragOverListId = ref(null)
+const isDraggingList = ref(false)
+const isDraggingCard = ref(false)
 
 // Nouveau modèle de carte
 const newCard = ref({
@@ -617,6 +640,9 @@ const createNewCard = async () => {
 
 // Ouvrir les détails d'une carte
 const openCardDetails = (card) => {
+  // Éviter d'ouvrir les détails si on est en train de glisser la carte
+  if (isDraggingCard.value) return
+  
   selectedCard.value = { ...card }
 }
 
@@ -638,6 +664,134 @@ const deleteSelectedCard = async () => {
       console.error('Error deleting card:', e)
     }
   }
+}
+
+// ========== FONCTIONS DE DRAG AND DROP ==========
+
+// Commencer à faire glisser une liste
+const startDraggingList = (event, list) => {
+  isDraggingList.value = true
+  draggedListId.value = list.id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('application/x-list', list.id)
+  
+  // Ajuster l'apparence de l'élément pendant le drag
+  const listElement = event.target
+  setTimeout(() => {
+    listElement.style.opacity = '0.5'
+  }, 0)
+}
+
+// Déposer sur une liste (pour le réordonnancement des listes)
+const dropOnList = async (event, targetList) => {
+  event.preventDefault()
+  
+  // Si nous faisons glisser une carte et pas une liste
+  if (isDraggingCard.value && !isDraggingList.value) {
+    return dropCardOnList(event, targetList.id)
+  }
+  
+  // Si nous ne sommes pas en train de faire glisser une liste, sortir
+  if (!isDraggingList.value || !draggedListId.value) return
+  
+  // Ne rien faire si on dépose la liste sur elle-même
+  if (draggedListId.value === targetList.id) return
+  
+  // Réorganiser les listes
+  try {
+    // Obtenir toutes les listes et leurs positions
+    const listsWithPositions = [...boardsStore.lists]
+    
+    // Trouver les index des listes source et cible
+    const draggedListIndex = listsWithPositions.findIndex(list => list.id === draggedListId.value)
+    const targetListIndex = listsWithPositions.findIndex(list => list.id === targetList.id)
+    
+    if (draggedListIndex !== -1 && targetListIndex !== -1) {
+      // Déplacer la liste à sa nouvelle position
+      const [draggedList] = listsWithPositions.splice(draggedListIndex, 1)
+      listsWithPositions.splice(targetListIndex, 0, draggedList)
+      
+      // Mettre à jour les positions
+      await boardsStore.updateListPositions(listsWithPositions)
+    }
+  } catch (e) {
+    error.value = 'Erreur lors du réordonnancement des listes'
+    console.error('Error reordering lists:', e)
+  }
+}
+
+// Commencer à faire glisser une carte
+const startDraggingCard = (event, card) => {
+  // Empêcher le comportement par défaut pour éviter l'ouverture des détails
+  event.stopPropagation()
+  
+  isDraggingCard.value = true
+  draggedCardId.value = card.id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('application/x-card', card.id)
+  event.dataTransfer.setData('text/plain', card.title)
+  
+  // Ajuster l'apparence de l'élément pendant le drag
+  const cardElement = event.target
+  setTimeout(() => {
+    cardElement.style.opacity = '0.5'
+  }, 0)
+}
+
+// Gérer le survol d'une liste avec une carte
+const onCardDragOver = (event, listId) => {
+  if (isDraggingCard.value) {
+    dragOverListId.value = listId
+  }
+}
+
+// Déposer une carte sur une liste
+const dropCardOnList = async (event, listId) => {
+  event.preventDefault()
+  
+  // Si nous ne sommes pas en train de faire glisser une carte, sortir
+  if (!isDraggingCard.value || !draggedCardId.value) return
+  
+  try {
+    const draggedCard = boardsStore.cards.find(card => card.id === draggedCardId.value)
+    if (!draggedCard) return
+    
+    // Obtenir les cartes déjà dans cette liste
+    const cardsInList = getCardsForList(listId)
+    
+    // Déterminer la position d'insertion
+    let newPosition = 0
+    if (cardsInList.length > 0) {
+      newPosition = cardsInList[cardsInList.length - 1].position + 1
+    }
+    
+    // Déplacer la carte vers la nouvelle liste
+    await boardsStore.updateCardList(draggedCardId.value, listId, newPosition)
+    
+    // Si la carte est déplacée dans la même liste, nous pouvons réorganiser les positions
+    if (draggedCard.listId === listId) {
+      // Réordonner les cartes dans la liste
+      const updatedCards = getCardsForList(listId)
+      await boardsStore.updateCardPositions(updatedCards, listId)
+    }
+  } catch (e) {
+    error.value = 'Erreur lors du déplacement de la carte'
+    console.error('Error moving card:', e)
+  }
+}
+
+// Terminer le drag (pour les cartes et les listes)
+const endDragging = () => {
+  isDraggingList.value = false
+  isDraggingCard.value = false
+  draggedListId.value = null
+  draggedCardId.value = null
+  dragOverListId.value = null
+  
+  // Restaurer l'opacité des éléments
+  document.querySelectorAll('.list, .card').forEach(element => {
+    element.style.opacity = '1'
+  })
 }
 </script>
 

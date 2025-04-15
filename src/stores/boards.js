@@ -506,6 +506,146 @@ export const useBoardsStore = defineStore('boards', () => {
     }
   }
 
+  // NOUVELLES MÉTHODES POUR LE DRAG AND DROP
+
+  // Mise à jour des positions des listes
+  const updateListPositions = async (listsWithPositions) => {
+    if (!authStore.user || !currentBoard.value)
+      throw new Error('User not authenticated or no board loaded')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      // Préparer les mises à jour pour Firebase
+      const updates = {}
+      
+      listsWithPositions.forEach((item, index) => {
+        updates[`lists/${item.id}/position`] = index
+      })
+      
+      // Effectuer toutes les mises à jour en une seule opération
+      await update(dbRef(db), updates)
+      
+      // Mettre à jour localement
+      listsWithPositions.forEach((item, index) => {
+        const listIndex = lists.value.findIndex(list => list.id === item.id)
+        if (listIndex !== -1) {
+          lists.value[listIndex].position = index
+        }
+      })
+      
+      // Trier les listes par position
+      lists.value.sort((a, b) => a.position - b.position)
+      
+      return true
+    } catch (e) {
+      console.error('Error updating list positions:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Mise à jour de la liste d'une carte (pour le glisser-déposer entre listes)
+  const updateCardList = async (cardId, newListId, newPosition) => {
+    if (!authStore.user || !currentBoard.value)
+      throw new Error('User not authenticated or no board loaded')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      // Trouver l'ancienne liste
+      const cardIndex = cards.value.findIndex(card => card.id === cardId)
+      if (cardIndex === -1) {
+        throw new Error('Carte non trouvée')
+      }
+      
+      const oldListId = cards.value[cardIndex].listId
+      
+      // Mettre à jour la carte dans la base de données
+      const cardRef = dbRef(db, `cards/${cardId}`)
+      await update(cardRef, { 
+        listId: newListId,
+        position: newPosition
+      })
+      
+      // Mettre à jour la carte localement
+      cards.value[cardIndex].listId = newListId
+      cards.value[cardIndex].position = newPosition
+      
+      // Ajouter une activité si la carte change de liste
+      if (oldListId !== newListId) {
+        const fromList = lists.value.find((l) => l.id === oldListId)
+        const toList = lists.value.find((l) => l.id === newListId)
+
+        if (fromList && toList && authStore.user) {
+          const activitiesRef = dbRef(db, 'activities')
+          const newActivityRef = push(activitiesRef)
+
+          await set(newActivityRef, {
+            boardId: currentBoard.value.id,
+            userId: authStore.user.uid,
+            action: 'moved',
+            entityType: 'card',
+            entityId: cardId,
+            fromListId: oldListId,
+            toListId: newListId,
+            text: `a déplacé la carte "${cards.value[cardIndex].title}" de "${fromList.title}" vers "${toList.title}"`,
+            createdAt: Date.now(),
+          })
+        }
+      }
+      
+      return true
+    } catch (e) {
+      console.error('Error updating card list:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Mise à jour des positions des cartes dans une liste
+  const updateCardPositions = async (cardsWithPositions, listId) => {
+    if (!authStore.user || !currentBoard.value)
+      throw new Error('User not authenticated or no board loaded')
+
+    try {
+      loading.value = true
+      error.value = null
+
+      // Préparer les mises à jour pour Firebase
+      const updates = {}
+      
+      cardsWithPositions.forEach((item, index) => {
+        updates[`cards/${item.id}/position`] = index
+      })
+      
+      // Effectuer toutes les mises à jour en une seule opération
+      await update(dbRef(db), updates)
+      
+      // Mettre à jour localement
+      cardsWithPositions.forEach((item, index) => {
+        const cardIndex = cards.value.findIndex(card => card.id === item.id)
+        if (cardIndex !== -1) {
+          cards.value[cardIndex].position = index
+        }
+      })
+      
+      return true
+    } catch (e) {
+      console.error('Error updating card positions:', e)
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     boards,
     currentBoard,
@@ -525,5 +665,9 @@ export const useBoardsStore = defineStore('boards', () => {
     deleteList,
     updateBoard,
     updateList,
+    // Nouvelles méthodes pour le drag and drop
+    updateListPositions,
+    updateCardList,
+    updateCardPositions
   }
 })
