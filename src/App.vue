@@ -18,7 +18,7 @@
                   type="text"
                   placeholder="Rechercher..."
                   v-model="searchQuery"
-                  @input="handleSearch"
+                  @keydown.enter="handleSearch"
                 />
               </div>
               <div class="user-info">
@@ -37,10 +37,11 @@
 
     <main>
       <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+  <transition name="fade" mode="out-in">
+    <!-- Ajouter une clé unique basée sur la query -->
+    <component :is="Component" :key="$route.query.q" />
+  </transition>
+</router-view>
     </main>
 
     <footer v-if="showFooter" class="footer">
@@ -87,14 +88,17 @@ const handleLogout = async () => {
 }
 
 // Gérer la recherche
-const handleSearch = () => {
-  if (searchQuery.value.trim().length > 2) {
+const handleSearch = (event) => {
+  event.preventDefault();  // Empêcher la soumission par défaut si l'input est dans un formulaire (si applicable)
+ 
+  
+  if (searchQuery.value.trim().length > 0) {  // Assurer que l'utilisateur a tapé au moins 3 caractères
     router.push({
-      name: 'search',
-      query: { q: searchQuery.value },
-    })
+      name: 'search',  // Cette route que nous avons définie pour la recherche
+      query: { q: searchQuery.value },  // Passer le texte de la recherche dans l'URL
+    });
   }
-}
+};
 
 // Vider la recherche quand on change de route
 watch(
