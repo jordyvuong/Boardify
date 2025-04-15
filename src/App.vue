@@ -23,6 +23,23 @@
               </div>
               <div class="user-info">
                 <span class="user-email">{{ authStore.user.email }}</span>
+                <span class="user-displayname" v-if="authStore.user.displayName">{{
+                  authStore.user.displayName
+                }}</span>
+                <img
+                  v-if="authStore.user.photoURL"
+                  :src="authStore.user.photoURL"
+                  alt="Profil"
+                  class="profile-photo"
+                  @click="router.push('/edit-profile')"
+                  style="
+                    cursor: pointer;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    margin-left: 0.5rem;
+                  "
+                />
                 <button class="logout-button" @click="handleLogout">Déconnexion</button>
               </div>
             </div>
