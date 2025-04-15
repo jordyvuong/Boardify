@@ -18,7 +18,7 @@
                   type="text"
                   placeholder="Rechercher..."
                   v-model="searchQuery"
-                  @input="handleSearch"
+                  @keydown.enter="handleSearch"
                 />
                 <span class="search-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
@@ -66,10 +66,11 @@
 
     <main>
       <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+  <transition name="fade" mode="out-in">
+    <!-- Ajouter une clé unique basée sur la query -->
+    <component :is="Component" :key="$route.query.q" />
+  </transition>
+</router-view>
     </main>
 
     <footer v-if="showFooter" class="footer">
@@ -84,11 +85,13 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import { searchItems } from './stores/boards'  // Importer la fonction de recherche
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const searchQuery = ref('')
+const results = ref([]);
 
 // Initialiser l'état d'authentification au chargement de l'app
 onMounted(() => {
@@ -116,14 +119,17 @@ const handleLogout = async () => {
 }
 
 // Gérer la recherche
-const handleSearch = () => {
-  if (searchQuery.value.trim().length > 2) {
+const handleSearch = (event) => {
+  event.preventDefault();  // Empêcher la soumission par défaut si l'input est dans un formulaire (si applicable)
+ 
+  
+  if (searchQuery.value.trim().length > 0) {  // Assurer que l'utilisateur a tapé au moins 3 caractères
     router.push({
-      name: 'search',
-      query: { q: searchQuery.value },
-    })
+      name: 'search',  // Cette route que nous avons définie pour la recherche
+      query: { q: searchQuery.value },  // Passer le texte de la recherche dans l'URL
+    });
   }
-}
+};
 
 // Obtenir les initiales de l'utilisateur pour l'avatar de secours
 const getUserInitials = () => {
@@ -139,10 +145,13 @@ const getUserInitials = () => {
 
 // Vider la recherche quand on change de route
 watch(
-  () => route.name,
-  () => {
-    searchQuery.value = ''
-  },
+  () => route.query.q,
+  async (newQuery) => {
+    if (newQuery) {
+      searchQuery.value = newQuery;
+      results.value = await searchItems(newQuery);  // Appeler searchItems pour mettre à jour les résultats
+    }
+  }
 )
 </script>
 

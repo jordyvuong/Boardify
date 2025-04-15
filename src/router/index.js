@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import BoardsView from '@/views/BoardsView.vue'
+import search from '@/views/SearchResults.vue'
 import { useAuthStore } from '@/stores/auth'
 import { watch } from 'vue'
 import BoardView from '@/views/BoardView.vue'
@@ -44,6 +45,13 @@ const router = createRouter({
       component: EditProfileView,
       meta: { requiresAuth: true },
     },
+    {
+      path: '/search',
+      name: 'search',
+      component: search,
+      meta: { requiresAuth: true },
+    },
+
   ],
 })
 
