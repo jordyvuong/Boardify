@@ -1,6 +1,35 @@
 <template>
     <div class="edit-profile-container">
       <h1>Modifier le profil</h1>
+  
+      <!-- Photo de profil centrée -->
+      <div class="profile-photo-container">
+        <div class="profile-photo-wrapper">
+          <img 
+            v-if="previewPhoto" 
+            :src="previewPhoto" 
+            alt="Photo de profil" 
+            class="profile-photo" 
+          />
+          <div v-else class="profile-photo-placeholder">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </div>
+          <div class="photo-upload-overlay">
+            <label for="photoURL" class="photo-upload-label">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+              Changer
+            </label>
+          </div>
+        </div>
+        <input 
+          type="file" 
+          id="photoURL" 
+          accept="image/*" 
+          @change="handleFileChange"
+          class="photo-upload-input"
+        />
+      </div>
+  
       <form @submit.prevent="saveProfile">
         <!-- Nom d'utilisateur -->
         <div class="form-group">
@@ -11,23 +40,6 @@
             v-model="displayName"
             placeholder="Nom d'utilisateur"
             required
-          />
-        </div>
-  
-        <!-- Photo -->
-        <div class="form-group">
-          <label for="photoURL">Photo de profil</label>
-          <input 
-            type="file" 
-            id="photoURL" 
-            accept="image/*" 
-            @change="handleFileChange" 
-          />
-          <img 
-            v-if="previewPhoto" 
-            :src="previewPhoto" 
-            alt="Aperçu" 
-            class="photo-preview" 
           />
         </div>
   
@@ -320,6 +332,78 @@
     color: #026aa7;
   }
   
+  /* Nouvelle section pour la photo de profil */
+  .profile-photo-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+  
+  .profile-photo-wrapper {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    border: 3px solid #0079bf;
+    transition: all 0.3s ease;
+  }
+  
+  .profile-photo-wrapper:hover {
+    transform: scale(1.02);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+  }
+  
+  .profile-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .profile-photo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #e4e6e9;
+    color: #6b778c;
+  }
+  
+  .photo-upload-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 8px 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .profile-photo-wrapper:hover .photo-upload-overlay {
+    opacity: 1;
+  }
+  
+  .photo-upload-label {
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  
+  .photo-upload-label svg {
+    margin-right: 5px;
+  }
+  
+  .photo-upload-input {
+    display: none;
+  }
+  
   .form-group {
     margin-bottom: 1.5rem;
   }
@@ -332,8 +416,7 @@
   }
   
   input[type='text'],
-  input[type='password'],
-  input[type='file'] {
+  input[type='password'] {
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #ddd;
@@ -347,14 +430,6 @@
     border-color: #0079bf;
     outline: none;
     box-shadow: 0 0 0 2px rgba(0, 121, 191, 0.2);
-  }
-  
-  .photo-preview {
-    display: block;
-    margin-top: 1rem;
-    max-width: 100px;
-    border-radius: 50%;
-    border: 2px solid #ddd;
   }
   
   /* Section mot de passe */
@@ -531,6 +606,11 @@
     .edit-profile-container {
       margin: 1rem;
       padding: 1rem;
+    }
+    
+    .profile-photo-wrapper {
+      width: 120px;
+      height: 120px;
     }
   }
   </style>
