@@ -354,7 +354,6 @@ header {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   min-width: 200px;
   z-index: 100;
-  margin-top: 0.5rem;
   display: none;
   overflow: hidden;
 }
