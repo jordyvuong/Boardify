@@ -6,6 +6,7 @@ import BoardsView from '@/views/BoardsView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { watch } from 'vue'
 import BoardView from '@/views/BoardView.vue'
+import EditProfileView from '@/views/EditProfileView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +36,12 @@ const router = createRouter({
       path: '/boards/:id',
       name: 'board',
       component: BoardView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/edit-profile',
+      name: 'edit-profile',
+      component: EditProfileView,
       meta: { requiresAuth: true },
     },
   ],

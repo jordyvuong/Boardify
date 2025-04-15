@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { auth } from '@/firebase'
+import { db } from '@/firebase'
+import { ref as dbRef, get } from 'firebase/database'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -16,18 +18,20 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Initialiser l'état de l'authentification
   const init = () => {
-    onAuthStateChanged(auth, (userData) => {
+    onAuthStateChanged(auth, async (userData) => {
       if (userData) {
+        const profile = await fetchUserProfile(userData.uid)
         user.value = {
           uid: userData.uid,
           email: userData.email,
-          displayName: userData.displayName,
+          displayName: profile.displayName || '',
+          photoURL: profile.photoURL || '',
         }
       } else {
         user.value = null
       }
       loading.value = false
-      authReady.value = true // Marquer l'authentification comme prête
+      authReady.value = true
     })
   }
 
@@ -36,9 +40,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       error.value = null
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      // Le profil sera créé dans la DB dans RegisterView.vue
       user.value = {
         uid: userCredential.user.uid,
         email: userCredential.user.email,
+        displayName: '',
+        photoURL: '',
       }
       return userCredential.user
     } catch (e) {
@@ -52,9 +59,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       error.value = null
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const profile = await fetchUserProfile(userCredential.user.uid)
       user.value = {
         uid: userCredential.user.uid,
         email: userCredential.user.email,
+        displayName: profile.displayName || '',
+        photoURL: profile.photoURL || '',
       }
       return userCredential.user
     } catch (e) {
@@ -72,6 +82,11 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = e.message
       throw e
     }
+  }
+
+  const fetchUserProfile = async (uid) => {
+    const snapshot = await get(dbRef(db, `users/${uid}`))
+    return snapshot.exists() ? snapshot.val() : {}
   }
 
   return { user, loading, error, authReady, init, register, login, logout }
