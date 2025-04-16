@@ -727,10 +727,11 @@ export const searchItems = async (searchQuery) => {
             Object.keys(card.tasks).forEach(taskKey => {
               const task = card.tasks[taskKey];
               const taskTitle = task.title ? task.title.toLowerCase() : '';
+              const taskDescription = task.description || ''; 
               console.log('Tâche trouvée:', task);  // Afficher les tâches
 
               if (taskTitle.includes(searchQuery.toLowerCase())) {
-                result.push({ type: 'task', title: task.title, id: taskKey, cardId: cardKey, boardId: boardSnapshot.key });
+                result.push({ type: 'task', title: task.title,  description: taskDescription, id: taskKey, cardId: cardKey, boardId: boardSnapshot.key });
               }
             });
           }
