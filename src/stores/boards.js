@@ -14,8 +14,6 @@ import {
 } from 'firebase/database'
 import { useAuthStore } from './auth'
 
-
-
 export const useBoardsStore = defineStore('boards', () => {
   const boards = ref([])
   const currentBoard = ref(null)
@@ -68,6 +66,7 @@ export const useBoardsStore = defineStore('boards', () => {
   }
 
   // Créer un nouveau tableau
+  // Dans boards.js, modifie la fonction createBoard
   const createBoard = async (boardData) => {
     if (!authStore.user) return
 
@@ -82,7 +81,12 @@ export const useBoardsStore = defineStore('boards', () => {
       await set(newBoardRef, {
         ...boardData,
         ownerId: userId,
-        members: { [userId]: true },
+        members: {
+          [userId]: {
+            role: 'owner',
+            joinedAt: Date.now(),
+          },
+        },
         createdAt: Date.now(),
       })
 
@@ -94,8 +98,44 @@ export const useBoardsStore = defineStore('boards', () => {
       error.value = e.message
       console.error('Error creating board:', e)
       throw e
-    } finally {
-      loading.value = false
+    }
+  }
+
+  // Dans boards.js, ajoute ces fonctions
+  const inviteUserToBoard = async (boardId, userEmail) => {
+    if (!authStore.user) throw new Error('Non authentifié')
+
+    try {
+      // Chercher l'utilisateur par email
+      const usersRef = dbRef(db, 'users')
+      const userQuery = query(usersRef, orderByChild('email'), equalTo(userEmail))
+      const userSnapshot = await get(userQuery)
+
+      if (!userSnapshot.exists()) {
+        throw new Error('Utilisateur non trouvé')
+      }
+
+      // Récupérer l'ID de l'utilisateur trouvé
+      const invitedUserId = Object.keys(userSnapshot.val())[0]
+
+      // Vérifier si l'utilisateur n'est pas déjà membre
+      const boardRef = dbRef(db, `boards/${boardId}/members/${invitedUserId}`)
+      const memberSnapshot = await get(boardRef)
+
+      if (memberSnapshot.exists()) {
+        throw new Error('Cet utilisateur est déjà membre du tableau')
+      }
+
+      // Ajouter l'utilisateur comme membre
+      await set(boardRef, {
+        role: 'member',
+        joinedAt: Date.now(),
+      })
+
+      return true
+    } catch (e) {
+      console.error('Error inviting user:', e)
+      throw e
     }
   }
 
@@ -521,25 +561,25 @@ export const useBoardsStore = defineStore('boards', () => {
 
       // Préparer les mises à jour pour Firebase
       const updates = {}
-      
+
       listsWithPositions.forEach((item, index) => {
         updates[`lists/${item.id}/position`] = index
       })
-      
+
       // Effectuer toutes les mises à jour en une seule opération
       await update(dbRef(db), updates)
-      
+
       // Mettre à jour localement
       listsWithPositions.forEach((item, index) => {
-        const listIndex = lists.value.findIndex(list => list.id === item.id)
+        const listIndex = lists.value.findIndex((list) => list.id === item.id)
         if (listIndex !== -1) {
           lists.value[listIndex].position = index
         }
       })
-      
+
       // Trier les listes par position
       lists.value.sort((a, b) => a.position - b.position)
-      
+
       return true
     } catch (e) {
       console.error('Error updating list positions:', e)
@@ -560,24 +600,24 @@ export const useBoardsStore = defineStore('boards', () => {
       error.value = null
 
       // Trouver l'ancienne liste
-      const cardIndex = cards.value.findIndex(card => card.id === cardId)
+      const cardIndex = cards.value.findIndex((card) => card.id === cardId)
       if (cardIndex === -1) {
         throw new Error('Carte non trouvée')
       }
-      
+
       const oldListId = cards.value[cardIndex].listId
-      
+
       // Mettre à jour la carte dans la base de données
       const cardRef = dbRef(db, `cards/${cardId}`)
-      await update(cardRef, { 
+      await update(cardRef, {
         listId: newListId,
-        position: newPosition
+        position: newPosition,
       })
-      
+
       // Mettre à jour la carte localement
       cards.value[cardIndex].listId = newListId
       cards.value[cardIndex].position = newPosition
-      
+
       // Ajouter une activité si la carte change de liste
       if (oldListId !== newListId) {
         const fromList = lists.value.find((l) => l.id === oldListId)
@@ -600,7 +640,7 @@ export const useBoardsStore = defineStore('boards', () => {
           })
         }
       }
-      
+
       return true
     } catch (e) {
       console.error('Error updating card list:', e)
@@ -622,22 +662,22 @@ export const useBoardsStore = defineStore('boards', () => {
 
       // Préparer les mises à jour pour Firebase
       const updates = {}
-      
+
       cardsWithPositions.forEach((item, index) => {
         updates[`cards/${item.id}/position`] = index
       })
-      
+
       // Effectuer toutes les mises à jour en une seule opération
       await update(dbRef(db), updates)
-      
+
       // Mettre à jour localement
       cardsWithPositions.forEach((item, index) => {
-        const cardIndex = cards.value.findIndex(card => card.id === item.id)
+        const cardIndex = cards.value.findIndex((card) => card.id === item.id)
         if (cardIndex !== -1) {
           cards.value[cardIndex].position = index
         }
       })
-      
+
       return true
     } catch (e) {
       console.error('Error updating card positions:', e)
@@ -667,80 +707,92 @@ export const useBoardsStore = defineStore('boards', () => {
     deleteList,
     updateBoard,
     updateList,
-    // Nouvelles méthodes pour le drag and drop
+    inviteUserToBoard,
     updateListPositions,
     updateCardList,
-    updateCardPositions
+    updateCardPositions,
   }
 })
 export const searchItems = async (searchQuery) => {
-  const db = getDatabase();
-  const boardsRef = dbRef(db, 'boards');
-  const result = [];
+  const db = getDatabase()
+  const boardsRef = dbRef(db, 'boards')
+  const result = []
 
-
-  console.log('Recherche lancée avec query:', searchQuery);  // Afficher la query de recherche
+  console.log('Recherche lancée avec query:', searchQuery) // Afficher la query de recherche
 
   // Vérifie si la recherche est vide
   if (!searchQuery || searchQuery.trim().length === 0) {
-    console.log('Aucune query fournie');
-    return result;  // Retourner un tableau vide si la query est vide
+    console.log('Aucune query fournie')
+    return result // Retourner un tableau vide si la query est vide
   }
 
-  
   try {
     // Requête pour récupérer les boards
-    const boardQuery = query(boardsRef, orderByChild('title')); 
-    console.log('Requête Firebase:', boardQuery);  // Afficher la requête Firebase
+    const boardQuery = query(boardsRef, orderByChild('title'))
+    console.log('Requête Firebase:', boardQuery) // Afficher la requête Firebase
     // Récupérer les données des boards
-    const snapshot = await get(boardQuery);
-  
+    const snapshot = await get(boardQuery)
 
     if (!snapshot.exists()) {
-      console.log('Aucun tableau trouvé dans Firebase');
+      console.log('Aucun tableau trouvé dans Firebase')
     }
 
     // Si des boards sont trouvés, on les ajoute aux résultats
-    snapshot.forEach(boardSnapshot => {
-      const board = boardSnapshot.val();
-        // Afficher les données du board
+    snapshot.forEach((boardSnapshot) => {
+      const board = boardSnapshot.val()
+      // Afficher les données du board
 
-      const boardTitle = board.title ? board.title.toLowerCase() : '';
-      const boardDescription = board.description || '';
+      const boardTitle = board.title ? board.title.toLowerCase() : ''
+      const boardDescription = board.description || ''
       if (boardTitle.includes(searchQuery.toLowerCase())) {
-        result.push({ type: 'board', title: board.title, description:boardDescription, id: boardSnapshot.key });
+        result.push({
+          type: 'board',
+          title: board.title,
+          description: boardDescription,
+          id: boardSnapshot.key,
+        })
       }
 
       // Recherche dans les cartes du board
       if (board.cards) {
-        Object.keys(board.cards).forEach(cardKey => {
-          const card = board.cards[cardKey];
-          const cardTitle = card.title ? card.title.toLowerCase() : '';
-          console.log('Carte trouvée:', card);  // Afficher les cartes
+        Object.keys(board.cards).forEach((cardKey) => {
+          const card = board.cards[cardKey]
+          const cardTitle = card.title ? card.title.toLowerCase() : ''
+          console.log('Carte trouvée:', card) // Afficher les cartes
 
           if (cardTitle.includes(searchQuery.toLowerCase())) {
-            result.push({ type: 'card', title: card.title, id: cardKey, boardId: boardSnapshot.key });
+            result.push({
+              type: 'card',
+              title: card.title,
+              id: cardKey,
+              boardId: boardSnapshot.key,
+            })
           }
 
           // Recherche dans les tâches de la carte
           if (card.tasks) {
-            Object.keys(card.tasks).forEach(taskKey => {
-              const task = card.tasks[taskKey];
-              const taskTitle = task.title ? task.title.toLowerCase() : '';
-              console.log('Tâche trouvée:', task);  // Afficher les tâches
+            Object.keys(card.tasks).forEach((taskKey) => {
+              const task = card.tasks[taskKey]
+              const taskTitle = task.title ? task.title.toLowerCase() : ''
+              console.log('Tâche trouvée:', task) // Afficher les tâches
 
               if (taskTitle.includes(searchQuery.toLowerCase())) {
-                result.push({ type: 'task', title: task.title, id: taskKey, cardId: cardKey, boardId: boardSnapshot.key });
+                result.push({
+                  type: 'task',
+                  title: task.title,
+                  id: taskKey,
+                  cardId: cardKey,
+                  boardId: boardSnapshot.key,
+                })
               }
-            });
+            })
           }
-        });
+        })
       }
-    });
-
+    })
   } catch (error) {
-    console.error('Erreur lors de la récupération des boards:', error);
+    console.error('Erreur lors de la récupération des boards:', error)
   }
 
-  return result;
-};
+  return result
+}

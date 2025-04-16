@@ -15,7 +15,17 @@
         </p>
       </div>
       <div class="board-actions">
+        <!-- Ajoutez le bouton de partage ici -->
+        <button class="action-btn" @click="showShareDialog = true">Partager</button>
         <button class="action-btn" @click="goBack">Retour</button>
+      </div>
+    </div>
+
+    <!-- Ajoutez la modal de partage ici, juste après le board-header -->
+    <div v-if="showShareDialog" class="modal-overlay">
+      <div class="modal-content">
+        <button class="close-btn" @click="showShareDialog = false">&times;</button>
+        <BoardShareDialog :board-id="boardsStore.currentBoard.id" />
       </div>
     </div>
 
@@ -329,6 +339,7 @@
 </template>
 
 <script setup>
+import BoardShareDialog from '@/components/BoardShareDialog.vue'
 import CardComponent from '@/components/cards/CardComponent.vue'
 import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -935,6 +946,39 @@ const saveCardChanges = async () => {
 const cancelEditing = () => {
   editingField.value = null
   editedCard.value = { ...selectedCard.value }
+}
+const showShareDialog = ref(false)
+
+const loadBoards = async () => {
+  if (!authStore.user) return
+
+  try {
+    loading.value = true
+    error.value = null
+
+    const boardsRef = dbRef(db, 'boards')
+    const snapshot = await get(boardsRef)
+    const boardsList = []
+
+    snapshot.forEach((childSnapshot) => {
+      const boardData = childSnapshot.val()
+      // Vérifier si l'utilisateur est membre ou propriétaire
+      if (boardData.members && boardData.members[authStore.user.uid]) {
+        boardsList.push({
+          id: childSnapshot.key,
+          ...boardData,
+          isOwner: boardData.ownerId === authStore.user.uid
+        })
+      }
+    })
+
+    boards.value = boardsList.sort((a, b) => b.createdAt - a.createdAt)
+  } catch (e) {
+    error.value = e.message
+    console.error('Error loading boards:', e)
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
