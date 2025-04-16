@@ -1,0 +1,129 @@
+.card {
+  position: relative;
+  background-color: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-default);
+  border-left: 3px solid transparent;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.card-checked {
+  border-left: 3px solid #232528;
+  background-color: rgba(76, 175, 80, 0.05);
+  animation: card-validate 0.5s ease;
+}
+
+@keyframes card-validate {
+  0% {
+    background-color: rgba(76, 175, 80, 0);
+  }
+  50% {
+    background-color: rgba(76, 175, 80, 0.1);
+  }
+  100% {
+    background-color: rgba(76, 175, 80, 0.05);
+  }
+}
+
+.check-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #dfe1e6;
+  background-color: white;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all var(--transition-default);
+  z-index: 1;
+  padding: 0;
+}
+
+.check-button:hover {
+  border-color: #2f333793;
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.check-button.checked {
+  background-color: #4caf50;
+  border-color: #4caf50;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: checkbox-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes checkbox-pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.check-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  font-weight: bold;
+  animation: checkmark-appear 0.3s ease forwards;
+}
+
+@keyframes checkmark-appear {
+  0% {
+    transform: scale(0) rotate(-45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+.card-title.checked {
+  text-decoration: line-through;
+  color: var(--text-light);
+  transition: all 0.3s ease;
+}
+
+.card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.card-label {
+  height: 8px;
+  width: 40px;
+  border-radius: 4px;
+}
+
+.card-footer {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
