@@ -486,7 +486,7 @@ const updateBoardDetails = async () => {
   border-radius: 3px;
   color: white;
   padding: 1rem;
-  height: 120px;
+  height: 130px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -496,6 +496,16 @@ const updateBoardDetails = async () => {
     box-shadow 0.2s;
   position: relative;
   overflow: hidden;
+  /* Supprimer la barre de défilement verticale */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE et Edge */
+}
+
+/* Masquer la barre de défilement pour Chrome, Safari et Opera */
+.board-card::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .board-card:hover {
@@ -532,6 +542,8 @@ const updateBoardDetails = async () => {
 .board-content {
   height: 100%;
   width: 100%;
+  /* Supprimer la barre de défilement verticale */
+  overflow: hidden;
 }
 
 .board-title {
