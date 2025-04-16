@@ -14,6 +14,8 @@ import {
 } from 'firebase/database'
 import { useAuthStore } from './auth'
 
+
+
 export const useBoardsStore = defineStore('boards', () => {
   const boards = ref([])
   const currentBoard = ref(null)
@@ -671,3 +673,74 @@ export const useBoardsStore = defineStore('boards', () => {
     updateCardPositions
   }
 })
+export const searchItems = async (searchQuery) => {
+  const db = getDatabase();
+  const boardsRef = dbRef(db, 'boards');
+  const result = [];
+
+
+  console.log('Recherche lancée avec query:', searchQuery);  // Afficher la query de recherche
+
+  // Vérifie si la recherche est vide
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    console.log('Aucune query fournie');
+    return result;  // Retourner un tableau vide si la query est vide
+  }
+
+  
+  try {
+    // Requête pour récupérer les boards
+    const boardQuery = query(boardsRef, orderByChild('title')); 
+    console.log('Requête Firebase:', boardQuery);  // Afficher la requête Firebase
+    // Récupérer les données des boards
+    const snapshot = await get(boardQuery);
+  
+
+    if (!snapshot.exists()) {
+      console.log('Aucun tableau trouvé dans Firebase');
+    }
+
+    // Si des boards sont trouvés, on les ajoute aux résultats
+    snapshot.forEach(boardSnapshot => {
+      const board = boardSnapshot.val();
+        // Afficher les données du board
+
+      const boardTitle = board.title ? board.title.toLowerCase() : '';
+      const boardDescription = board.description || '';
+      if (boardTitle.includes(searchQuery.toLowerCase())) {
+        result.push({ type: 'board', title: board.title, description:boardDescription, id: boardSnapshot.key });
+      }
+
+      // Recherche dans les cartes du board
+      if (board.cards) {
+        Object.keys(board.cards).forEach(cardKey => {
+          const card = board.cards[cardKey];
+          const cardTitle = card.title ? card.title.toLowerCase() : '';
+          console.log('Carte trouvée:', card);  // Afficher les cartes
+
+          if (cardTitle.includes(searchQuery.toLowerCase())) {
+            result.push({ type: 'card', title: card.title, id: cardKey, boardId: boardSnapshot.key });
+          }
+
+          // Recherche dans les tâches de la carte
+          if (card.tasks) {
+            Object.keys(card.tasks).forEach(taskKey => {
+              const task = card.tasks[taskKey];
+              const taskTitle = task.title ? task.title.toLowerCase() : '';
+              console.log('Tâche trouvée:', task);  // Afficher les tâches
+
+              if (taskTitle.includes(searchQuery.toLowerCase())) {
+                result.push({ type: 'task', title: task.title, id: taskKey, cardId: cardKey, boardId: boardSnapshot.key });
+              }
+            });
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des boards:', error);
+  }
+
+  return result;
+};

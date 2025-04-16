@@ -57,19 +57,29 @@
           </div>
 
           <div 
-            class="cards-container"
-            @dragover.prevent="onCardDragOver($event, list.id)"
-            @drop="dropCardOnList($event, list.id)"
-          >
-            <div
-              v-for="card in getCardsForList(list.id)"
-              :key="card.id"
-              class="card"
-              draggable="true"
-              @dragstart="startDraggingCard($event, card)"
-              @dragend="endDragging"
-              @click="openCardDetails(card)"
-            >
+  class="cards-container"
+  :class="{ 'drag-active': isDraggingCard }"
+  @dragover.prevent="onCardDragOver($event, list.id)"
+  @drop="dropCardOnList($event, list.id)"
+>
+<div
+    v-for="(card, index) in getCardsForList(list.id)"
+    :key="card.id"
+    class="card"
+    draggable="true"
+    :data-card-id="card.id"
+    :data-position="index"
+    @dragstart="startDraggingCard($event, card)"
+    @dragend="endDragging"
+    @dragenter.prevent="onCardDragEnter($event, card)"
+    @dragleave="onCardDragLeave($event)"
+    @click="openCardDetails(card)"
+    :class="{
+      'card-drag-over': isDraggedOver(card.id),
+      'card-drag-over-top': isDraggedOverTop(card.id),
+      'card-drag-over-bottom': isDraggedOverBottom(card.id)
+    }"
+  >
               <div v-if="card.labels && Object.keys(card.labels).length > 0" class="card-labels">
                 <span
                   v-for="(value, label) in card.labels"
@@ -334,6 +344,11 @@ const draggedCardId = ref(null)
 const dragOverListId = ref(null)
 const isDraggingList = ref(false)
 const isDraggingCard = ref(false)
+// Variables pour le drag and drop amélioré
+const draggedOverCardId = ref(null)
+const dropPosition = ref(null) // 'top' ou 'bottom'
+const cardRects = ref(new Map()) // Pour stocker les positions des cartes
+
 
 // Nouveau modèle de carte
 const newCard = ref({
@@ -342,6 +357,7 @@ const newCard = ref({
   labels: {},
   dueDate: '',
 })
+
 
 // Étiquettes disponibles
 const labels = ref({
@@ -667,7 +683,40 @@ const deleteSelectedCard = async () => {
 }
 
 // ========== FONCTIONS DE DRAG AND DROP ==========
+const onCardDragEnter = (event, targetCard) => {
+  if (!isDraggingCard.value || draggedCardId.value === targetCard.id) return
+  
+  const cardElement = event.target
+  const rect = cardElement.getBoundingClientRect()
+  const mouseY = event.clientY
+  const threshold = rect.top + (rect.height / 2)
+  
+  draggedOverCardId.value = targetCard.id
+  dropPosition.value = mouseY < threshold ? 'top' : 'bottom'
+  
+  // Stocker la position de la carte pour référence
+  cardRects.value.set(targetCard.id, rect)
+}
 
+const onCardDragLeave = (event) => {
+  // Vérifier si on quitte vraiment la carte (et pas un élément enfant)
+  if (!event.relatedTarget?.closest('.card')) {
+    draggedOverCardId.value = null
+    dropPosition.value = null
+  }
+}
+
+const isDraggedOver = (cardId) => {
+  return draggedOverCardId.value === cardId
+}
+
+const isDraggedOverTop = (cardId) => {
+  return isDraggedOver(cardId) && dropPosition.value === 'top'
+}
+
+const isDraggedOverBottom = (cardId) => {
+  return isDraggedOver(cardId) && dropPosition.value === 'bottom'
+}
 // Commencer à faire glisser une liste
 const startDraggingList = (event, list) => {
   isDraggingList.value = true
@@ -745,38 +794,51 @@ const onCardDragOver = (event, listId) => {
   }
 }
 
-// Déposer une carte sur une liste
 const dropCardOnList = async (event, listId) => {
   event.preventDefault()
   
-  // Si nous ne sommes pas en train de faire glisser une carte, sortir
   if (!isDraggingCard.value || !draggedCardId.value) return
   
   try {
     const draggedCard = boardsStore.cards.find(card => card.id === draggedCardId.value)
     if (!draggedCard) return
     
-    // Obtenir les cartes déjà dans cette liste
+    const targetCard = boardsStore.cards.find(card => card.id === draggedOverCardId.value)
     const cardsInList = getCardsForList(listId)
     
-    // Déterminer la position d'insertion
     let newPosition = 0
-    if (cardsInList.length > 0) {
-      newPosition = cardsInList[cardsInList.length - 1].position + 1
+    
+    if (targetCard) {
+      const targetPosition = targetCard.position
+      if (dropPosition.value === 'top') {
+        newPosition = targetPosition - 0.5
+      } else {
+        newPosition = targetPosition + 0.5
+      }
+    } else {
+      // Si pas de carte cible, placer à la fin
+      newPosition = cardsInList.length > 0 
+        ? cardsInList[cardsInList.length - 1].position + 1 
+        : 0
     }
     
-    // Déplacer la carte vers la nouvelle liste
     await boardsStore.updateCardList(draggedCardId.value, listId, newPosition)
     
-    // Si la carte est déplacée dans la même liste, nous pouvons réorganiser les positions
-    if (draggedCard.listId === listId) {
-      // Réordonner les cartes dans la liste
-      const updatedCards = getCardsForList(listId)
-      await boardsStore.updateCardPositions(updatedCards, listId)
-    }
+    // Réorganiser toutes les positions des cartes
+    const updatedCards = getCardsForList(listId)
+      .sort((a, b) => a.position - b.position)
+      .map((card, index) => ({
+        ...card,
+        position: index
+      }))
+    
+    await boardsStore.updateCardPositions(updatedCards, listId)
   } catch (e) {
     error.value = 'Erreur lors du déplacement de la carte'
     console.error('Error moving card:', e)
+  } finally {
+    draggedOverCardId.value = null
+    dropPosition.value = null
   }
 }
 
@@ -801,7 +863,52 @@ const endDragging = () => {
   width: 100%;
   overflow-x: auto;
 }
+.card {
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s, margin 0.2s;
+  background-color: white;
+  border-radius: 3px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
+}
+.card:active {
+  cursor: grabbing;
+}
+.card-drag-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #2196F3;
+  z-index: 1;
+}
 
+.card-drag-over-top::before {
+  top: 0;
+}
+
+.card-drag-over-bottom::before {
+  bottom: 0;
+}
+
+.card-drag-over-top {
+  margin-top: 1rem;
+}
+
+.card-drag-over-bottom {
+  margin-bottom: 1rem;
+}
+
+.card.dragging {
+  cursor: grabbing !important;
+  transform: scale(1.02);
+  box-shadow: 0 5px 15px rgba(9, 30, 66, 0.3);
+  opacity: 0.9;
+  pointer-events: none;
+  background-color: #f7f9fc;
+}
 .board-header {
   padding: 1rem 1.5rem;
   color: white;
@@ -975,8 +1082,9 @@ const endDragging = () => {
 }
 
 .card:hover {
+  cursor: grab;
   transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(9, 30, 66, 0.25);
+  box-shadow: 0 2px 8px rgba(9, 30, 66, 0.25);
 }
 
 .card-labels {
@@ -1310,10 +1418,14 @@ const endDragging = () => {
   animation: spin 1s ease-in-out infinite;
   margin-bottom: 1rem;
 }
-
-@keyframes spin {
+@keyframes cardInsert {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
