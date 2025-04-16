@@ -1,0 +1,47 @@
+.board-view {
+  min-height: calc(100vh - 60px);
+  width: 100%;
+  overflow-x: auto;
+}
+
+.board-header {
+  padding: 1rem 1.5rem;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.lists-container {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: calc(100vh - 130px);
+  align-items: flex-start;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
