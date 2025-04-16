@@ -1,8 +1,6 @@
 # Boardify - Clone de Trello
 
-Boardify est un clone de Trello développé avec Vue.js et Firebase dans le cadre du projet fil rouge EFREI 2A.
-
-![Boardify Screenshot](path/to/screenshot.png)
+Boardify est un clone de Trello développé avec Vue.js et Firebase dans le cadre du projet fil rouge EFREI 2B.
 
 ## Membres du groupe
 
