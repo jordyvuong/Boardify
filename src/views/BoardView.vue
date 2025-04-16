@@ -26,9 +26,9 @@
 
     <div v-else class="board-content">
       <div class="lists-container" @dragover.prevent>
-        <div 
-          v-for="list in boardsStore.lists" 
-          :key="list.id" 
+        <div
+          v-for="list in boardsStore.lists"
+          :key="list.id"
           class="list"
           draggable="true"
           @dragstart="startDraggingList($event, list)"
@@ -56,43 +56,34 @@
             <button class="list-menu-btn" @click.stop="showListMenu(list.id, $event)">•••</button>
           </div>
 
-          <div 
+          <div
             class="cards-container"
+            :class="{ 'drag-active': isDraggingCard }"
             @dragover.prevent="onCardDragOver($event, list.id)"
             @drop="dropCardOnList($event, list.id)"
           >
-            <div
-              v-for="card in getCardsForList(list.id)"
+            <CardComponent
+              v-for="(card, index) in getCardsForList(list.id)"
               :key="card.id"
-              class="card"
+              :card="card"
+              :show-checkbox="hoveredCardId === card.id || card.checked"
               draggable="true"
+              @check="toggleCardCheck(card)"
+              @mouseenter="hoveredCardId = card.id"
+              @mouseleave="hoveredCardId = null"
+              :data-card-id="card.id"
+              :data-position="index"
               @dragstart="startDraggingCard($event, card)"
               @dragend="endDragging"
+              @dragenter.prevent="onCardDragEnter($event, card)"
+              @dragleave="onCardDragLeave($event)"
               @click="openCardDetails(card)"
-            >
-              <div v-if="card.labels && Object.keys(card.labels).length > 0" class="card-labels">
-                <span
-                  v-for="(value, label) in card.labels"
-                  :key="label"
-                  class="card-label"
-                  :style="{ backgroundColor: getLabelColor(label) }"
-                  v-if="value"
-                >
-                  {{ getLabelName(label) }}
-                </span>
-              </div>
-              <h3 class="card-title">{{ card.title }}</h3>
-              <p v-if="card.description" class="card-description">{{ card.description }}</p>
-
-              <div class="card-footer" v-if="card.dueDate || card.assignedTo">
-                <div v-if="card.dueDate" class="card-due-date">
-                  📅 {{ formatDate(card.dueDate) }}
-                </div>
-                <div v-if="card.assignedTo" class="card-assigned">
-                  👤 {{ getUserName(card.assignedTo) }}
-                </div>
-              </div>
-            </div>
+              :class="{
+                'card-drag-over': isDraggedOver(card.id),
+                'card-drag-over-top': isDraggedOverTop(card.id),
+                'card-drag-over-bottom': isDraggedOverBottom(card.id),
+              }"
+            />
 
             <button class="add-card-btn" @click="showAddCardForm(list.id)">
               + Ajouter une carte
@@ -222,70 +213,107 @@
     </div>
 
     <!-- Modal de détails de carte -->
-    <div v-if="selectedCard" class="modal-overlay" @click.self="closeCardDetails">
-      <div class="modal-content card-details">
-        <div class="card-detail-header">
-          <h2>{{ selectedCard.title }}</h2>
-          <button class="close-btn" @click="closeCardDetails">×</button>
-        </div>
+    <!-- Remplacer la section du modal de détails de carte existant -->
+<div v-if="selectedCard" class="modal-overlay" @click.self="closeCardDetails">
+  <div class="modal-content card-details">
+    <div class="card-detail-header">
+      <!-- Titre éditable -->
+      <div class="editable-field">
+        <input
+          v-if="editingField === 'title'"
+          v-model="editedCard.title"
+          @keyup.enter="saveCardChanges"
+          @keyup.esc="cancelEditing"
+          @blur="saveCardChanges"
+          ref="titleInput"
+          class="editable-input"
+        />
+        <h2 v-else @click="startEditing('title')">
+          {{ selectedCard.title }}
+        </h2>
+      </div>
+      <button class="close-btn" @click="closeCardDetails">×</button>
+    </div>
 
-        <div class="card-detail-content">
-          <div class="form-group">
-            <label>Dans la liste</label>
-            <p class="list-name">
-              {{ getListName(selectedCard.listId) }}
-            </p>
-          </div>
+    <div class="card-detail-content">
+      <div class="form-group">
+        <label>Dans la liste</label>
+        <p class="list-name">{{ getListName(selectedCard.listId) }}</p>
+      </div>
 
-          <div class="form-group">
-            <label>Description</label>
-            <p class="description" v-if="selectedCard.description">
-              {{ selectedCard.description }}
-            </p>
-            <p class="no-description" v-else>Aucune description</p>
-          </div>
-
-          <div
-            class="form-group"
-            v-if="selectedCard.labels && Object.keys(selectedCard.labels).length > 0"
+      <!-- Description éditable -->
+      <div class="form-group">
+        <label>Description</label>
+        <div class="editable-field">
+          <textarea
+            v-if="editingField === 'description'"
+            v-model="editedCard.description"
+            @keyup.enter="saveCardChanges"
+            @keyup.esc="cancelEditing"
+            @blur="saveCardChanges"
+            ref="descriptionInput"
+            class="editable-input description-input"
+            rows="4"
+          ></textarea>
+          <p 
+            v-else 
+            @click="startEditing('description')" 
+            class="description"
+            :class="{ 'empty-description': !selectedCard.description }"
           >
-            <label>Étiquettes</label>
-            <div class="labels-display">
-              <span
-                v-for="(value, label) in selectedCard.labels"
-                :key="label"
-                class="card-label"
-                :style="{ backgroundColor: getLabelColor(label) }"
-                v-if="value"
-              >
-                {{ getLabelName(label) }}
-              </span>
-            </div>
-          </div>
-
-          <div class="form-group" v-if="selectedCard.dueDate">
-            <label>Date d'échéance</label>
-            <p class="due-date">📅 {{ formatDate(selectedCard.dueDate) }}</p>
-          </div>
-
-          <div class="form-group" v-if="selectedCard.assignedTo">
-            <label>Assigné à</label>
-            <p class="assigned-to">👤 {{ getUserName(selectedCard.assignedTo) }}</p>
-          </div>
-
-          <div class="form-group">
-            <label>Créé le</label>
-            <p class="created-at">
-              {{ formatDate(selectedCard.createdAt) }}
-            </p>
-          </div>
-        </div>
-
-        <div class="card-detail-actions">
-          <button class="delete-btn" @click="deleteSelectedCard">Supprimer cette carte</button>
+            {{ selectedCard.description || 'Cliquez pour ajouter une description...' }}
+          </p>
         </div>
       </div>
+
+      <!-- Labels -->
+      <div 
+        class="form-group"
+        v-if="selectedCard.labels && Object.keys(selectedCard.labels).length > 0"
+      >
+        <label>Étiquettes</label>
+        <div class="labels-display">
+          <span
+            v-for="(value, label) in selectedCard.labels"
+            :key="label"
+            class="card-label"
+            :style="{ backgroundColor: getLabelColor(label) }"
+            v-if="value"
+          >
+            {{ getLabelName(label) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Date d'échéance -->
+      <div class="form-group" v-if="selectedCard.dueDate">
+        <label>Date d'échéance</label>
+        <p class="due-date">📅 {{ formatDate(selectedCard.dueDate) }}</p>
+      </div>
+
+      <!-- Assignation -->
+      <div class="form-group" v-if="selectedCard.assignedTo">
+        <label>Assigné à</label>
+        <p class="assigned-to">👤 {{ getUserName(selectedCard.assignedTo) }}</p>
+      </div>
+
+      <!-- Date de création -->
+      <div class="form-group">
+        <label>Créé le</label>
+        <p class="created-at">
+          {{ formatDate(selectedCard.createdAt) }}
+        </p>
+      </div>
     </div>
+
+    <div class="card-detail-actions">
+      <button class="delete-btn" @click="deleteSelectedCard">
+        Supprimer cette carte
+      </button>
+    </div>
+  </div>
+</div>
+    
   </div>
   <div v-else-if="loading" class="loading-container">
     <div class="loading-spinner"></div>
@@ -301,6 +329,7 @@
 </template>
 
 <script setup>
+import CardComponent from '@/components/cards/CardComponent.vue'
 import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBoardsStore } from '@/stores/boards'
@@ -334,6 +363,10 @@ const draggedCardId = ref(null)
 const dragOverListId = ref(null)
 const isDraggingList = ref(false)
 const isDraggingCard = ref(false)
+// Variables pour le drag and drop amélioré
+const draggedOverCardId = ref(null)
+const dropPosition = ref(null) // 'top' ou 'bottom'
+const cardRects = ref(new Map()) // Pour stocker les positions des cartes
 
 // Nouveau modèle de carte
 const newCard = ref({
@@ -642,7 +675,7 @@ const createNewCard = async () => {
 const openCardDetails = (card) => {
   // Éviter d'ouvrir les détails si on est en train de glisser la carte
   if (isDraggingCard.value) return
-  
+
   selectedCard.value = { ...card }
 }
 
@@ -667,14 +700,47 @@ const deleteSelectedCard = async () => {
 }
 
 // ========== FONCTIONS DE DRAG AND DROP ==========
+const onCardDragEnter = (event, targetCard) => {
+  if (!isDraggingCard.value || draggedCardId.value === targetCard.id) return
 
+  const cardElement = event.target
+  const rect = cardElement.getBoundingClientRect()
+  const mouseY = event.clientY
+  const threshold = rect.top + rect.height / 2
+
+  draggedOverCardId.value = targetCard.id
+  dropPosition.value = mouseY < threshold ? 'top' : 'bottom'
+
+  // Stocker la position de la carte pour référence
+  cardRects.value.set(targetCard.id, rect)
+}
+
+const onCardDragLeave = (event) => {
+  // Vérifier si on quitte vraiment la carte (et pas un élément enfant)
+  if (!event.relatedTarget?.closest('.card')) {
+    draggedOverCardId.value = null
+    dropPosition.value = null
+  }
+}
+
+const isDraggedOver = (cardId) => {
+  return draggedOverCardId.value === cardId
+}
+
+const isDraggedOverTop = (cardId) => {
+  return isDraggedOver(cardId) && dropPosition.value === 'top'
+}
+
+const isDraggedOverBottom = (cardId) => {
+  return isDraggedOver(cardId) && dropPosition.value === 'bottom'
+}
 // Commencer à faire glisser une liste
 const startDraggingList = (event, list) => {
   isDraggingList.value = true
   draggedListId.value = list.id
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('application/x-list', list.id)
-  
+
   // Ajuster l'apparence de l'élément pendant le drag
   const listElement = event.target
   setTimeout(() => {
@@ -685,32 +751,32 @@ const startDraggingList = (event, list) => {
 // Déposer sur une liste (pour le réordonnancement des listes)
 const dropOnList = async (event, targetList) => {
   event.preventDefault()
-  
+
   // Si nous faisons glisser une carte et pas une liste
   if (isDraggingCard.value && !isDraggingList.value) {
     return dropCardOnList(event, targetList.id)
   }
-  
+
   // Si nous ne sommes pas en train de faire glisser une liste, sortir
   if (!isDraggingList.value || !draggedListId.value) return
-  
+
   // Ne rien faire si on dépose la liste sur elle-même
   if (draggedListId.value === targetList.id) return
-  
+
   // Réorganiser les listes
   try {
     // Obtenir toutes les listes et leurs positions
     const listsWithPositions = [...boardsStore.lists]
-    
+
     // Trouver les index des listes source et cible
-    const draggedListIndex = listsWithPositions.findIndex(list => list.id === draggedListId.value)
-    const targetListIndex = listsWithPositions.findIndex(list => list.id === targetList.id)
-    
+    const draggedListIndex = listsWithPositions.findIndex((list) => list.id === draggedListId.value)
+    const targetListIndex = listsWithPositions.findIndex((list) => list.id === targetList.id)
+
     if (draggedListIndex !== -1 && targetListIndex !== -1) {
       // Déplacer la liste à sa nouvelle position
       const [draggedList] = listsWithPositions.splice(draggedListIndex, 1)
       listsWithPositions.splice(targetListIndex, 0, draggedList)
-      
+
       // Mettre à jour les positions
       await boardsStore.updateListPositions(listsWithPositions)
     }
@@ -724,13 +790,13 @@ const dropOnList = async (event, targetList) => {
 const startDraggingCard = (event, card) => {
   // Empêcher le comportement par défaut pour éviter l'ouverture des détails
   event.stopPropagation()
-  
+
   isDraggingCard.value = true
   draggedCardId.value = card.id
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('application/x-card', card.id)
   event.dataTransfer.setData('text/plain', card.title)
-  
+
   // Ajuster l'apparence de l'élément pendant le drag
   const cardElement = event.target
   setTimeout(() => {
@@ -745,38 +811,49 @@ const onCardDragOver = (event, listId) => {
   }
 }
 
-// Déposer une carte sur une liste
 const dropCardOnList = async (event, listId) => {
   event.preventDefault()
-  
-  // Si nous ne sommes pas en train de faire glisser une carte, sortir
+
   if (!isDraggingCard.value || !draggedCardId.value) return
-  
+
   try {
-    const draggedCard = boardsStore.cards.find(card => card.id === draggedCardId.value)
+    const draggedCard = boardsStore.cards.find((card) => card.id === draggedCardId.value)
     if (!draggedCard) return
-    
-    // Obtenir les cartes déjà dans cette liste
+
+    const targetCard = boardsStore.cards.find((card) => card.id === draggedOverCardId.value)
     const cardsInList = getCardsForList(listId)
-    
-    // Déterminer la position d'insertion
+
     let newPosition = 0
-    if (cardsInList.length > 0) {
-      newPosition = cardsInList[cardsInList.length - 1].position + 1
+
+    if (targetCard) {
+      const targetPosition = targetCard.position
+      if (dropPosition.value === 'top') {
+        newPosition = targetPosition - 0.5
+      } else {
+        newPosition = targetPosition + 0.5
+      }
+    } else {
+      // Si pas de carte cible, placer à la fin
+      newPosition = cardsInList.length > 0 ? cardsInList[cardsInList.length - 1].position + 1 : 0
     }
-    
-    // Déplacer la carte vers la nouvelle liste
+
     await boardsStore.updateCardList(draggedCardId.value, listId, newPosition)
-    
-    // Si la carte est déplacée dans la même liste, nous pouvons réorganiser les positions
-    if (draggedCard.listId === listId) {
-      // Réordonner les cartes dans la liste
-      const updatedCards = getCardsForList(listId)
-      await boardsStore.updateCardPositions(updatedCards, listId)
-    }
+
+    // Réorganiser toutes les positions des cartes
+    const updatedCards = getCardsForList(listId)
+      .sort((a, b) => a.position - b.position)
+      .map((card, index) => ({
+        ...card,
+        position: index,
+      }))
+
+    await boardsStore.updateCardPositions(updatedCards, listId)
   } catch (e) {
     error.value = 'Erreur lors du déplacement de la carte'
     console.error('Error moving card:', e)
+  } finally {
+    draggedOverCardId.value = null
+    dropPosition.value = null
   }
 }
 
@@ -787,21 +864,135 @@ const endDragging = () => {
   draggedListId.value = null
   draggedCardId.value = null
   dragOverListId.value = null
-  
+
   // Restaurer l'opacité des éléments
-  document.querySelectorAll('.list, .card').forEach(element => {
+  document.querySelectorAll('.list, .card').forEach((element) => {
     element.style.opacity = '1'
   })
 }
+
+const hoveredCardId = ref(null)
+
+// Ajouter cette nouvelle fonction
+const toggleCardCheck = async (card) => {
+  try {
+    await boardsStore.updateCard(card.id, {
+      ...card,
+      checked: !card.checked,
+    })
+  } catch (e) {
+    error.value = 'Erreur lors de la mise à jour de la carte'
+    console.error('Error updating card:', e)
+  }
+}
+
+// Ajouter ces refs avec les autres refs existantes
+const editingField = ref(null)
+const editedCard = ref(null)
+const titleInput = ref(null)
+const descriptionInput = ref(null)
+
+// Ajouter ces méthodes
+const startEditing = (field) => {
+  editingField.value = field
+  if (!editedCard.value) {
+    editedCard.value = { ...selectedCard.value }
+  }
+  
+  nextTick(() => {
+    if (field === 'title' && titleInput.value) {
+      titleInput.value.focus()
+    } else if (field === 'description' && descriptionInput.value) {
+      descriptionInput.value.focus()
+    }
+  })
+}
+
+const saveCardChanges = async () => {
+  if (!editedCard.value || !selectedCard.value) return
+  
+  try {
+    await boardsStore.updateCard(selectedCard.value.id, {
+      title: editedCard.value.title,
+      description: editedCard.value.description
+    })
+    
+    // Mettre à jour la carte sélectionnée
+    selectedCard.value = {
+      ...selectedCard.value,
+      title: editedCard.value.title,
+      description: editedCard.value.description
+    }
+    
+    // Réinitialiser l'état d'édition
+    editingField.value = null
+  } catch (e) {
+    error.value = "Erreur lors de la mise à jour de la carte"
+    console.error('Error updating card:', e)
+  }
+}
+
+const cancelEditing = () => {
+  editingField.value = null
+  editedCard.value = { ...selectedCard.value }
+}
 </script>
 
-<style scoped>
+<style>
 .board-view {
   min-height: calc(100vh - 60px); /* Hauteur moins la navbar */
   width: 100%;
   overflow-x: auto;
 }
+.card {
+  position: relative;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    margin 0.2s;
+  background-color: white;
+  border-radius: 3px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
+}
+.card:active {
+  cursor: grabbing;
+}
+.card-drag-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #2196f3;
+  z-index: 1;
+}
 
+.card-drag-over-top::before {
+  top: 0;
+}
+
+.card-drag-over-bottom::before {
+  bottom: 0;
+}
+
+.card-drag-over-top {
+  margin-top: 1rem;
+}
+
+.card-drag-over-bottom {
+  margin-bottom: 1rem;
+}
+
+.card.dragging {
+  cursor: grabbing !important;
+  transform: scale(1.02);
+  box-shadow: 0 5px 15px rgba(9, 30, 66, 0.3);
+  opacity: 0.9;
+  pointer-events: none;
+  background-color: #f7f9fc;
+}
 .board-header {
   padding: 1rem 1.5rem;
   color: white;
@@ -975,8 +1166,9 @@ const endDragging = () => {
 }
 
 .card:hover {
+  cursor: grab;
   transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(9, 30, 66, 0.25);
+  box-shadow: 0 2px 8px rgba(9, 30, 66, 0.25);
 }
 
 .card-labels {
@@ -1290,6 +1482,43 @@ const endDragging = () => {
   cursor: not-allowed;
 }
 
+/* Styles pour les champs éditables */
+.editable-field {
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 3px;
+}
+
+.editable-field:hover {
+  background-color: rgba(9, 30, 66, 0.04);
+}
+
+.editable-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 2px solid #0079bf;
+  border-radius: 3px;
+  font-size: inherit;
+  font-family: inherit;
+  background-color: white;
+}
+
+.description-input {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.empty-description {
+  color: #6b778c;
+  font-style: italic;
+}
+
+.card-detail-header h2 {
+  margin: 0;
+  padding: 0.5rem;
+}
+
+
 /* Loading */
 .loading-container {
   display: flex;
@@ -1314,6 +1543,16 @@ const endDragging = () => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes cardInsert {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
