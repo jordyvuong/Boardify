@@ -1,10 +1,8 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from 'firebase/app'
 import { getAnalytics } from 'firebase/analytics'
 import { getDatabase } from 'firebase/database'
 import { getAuth } from 'firebase/auth'
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: 'AIzaSyDeOSYF0DetIM7S0wxbkDAIxRLTxSeQ6kU',
   authDomain: 'boardify-ffc27.firebaseapp.com',
@@ -13,7 +11,7 @@ const firebaseConfig = {
   messagingSenderId: '565573258823',
   appId: '1:565573258823:web:7190b63a3e4b9367622b62',
   measurementId: 'G-84WLSKGRLB',
-  databaseURL: 'https://boardify-ffc27-default-rtdb.europe-west1.firebasedatabase.app/', // Ajoutez cette ligne
+  databaseURL: 'https://boardify-ffc27-default-rtdb.europe-west1.firebasedatabase.app/', 
 }
 
 // Initialize Firebase

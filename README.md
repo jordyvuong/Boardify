@@ -25,9 +25,9 @@ Boardify est un clone de Trello développé avec Vue.js et Firebase dans le cadr
   - Vue.js 3 (Composition API)
   - Vue Router
   - Pinia (State Management)
-  - vue-draggable-next
 
 - **Backend & Base de données**:
+
   - Firebase Authentication
   - Firebase Realtime Database
   - Firebase Stockage
@@ -44,7 +44,7 @@ Boardify est un clone de Trello développé avec Vue.js et Firebase dans le cadr
 1. Cloner le dépôt:
 
    ```bash
-   git clone https://github.com/votre-username/boardify.git
+   git clone https://github.com/jordyvuong/Boardify.git
    cd boardify
    ```
 
@@ -54,32 +54,13 @@ Boardify est un clone de Trello développé avec Vue.js et Firebase dans le cadr
    npm install
    ```
 
-3. Configurer Firebase:
-
-   - Créer un projet Firebase dans la [Console Firebase](https://console.firebase.google.com/)
-   - Activer l'authentification Email/Password
-   - Activer Realtime Database
-   - Copier les informations de configuration Firebase
-
-4. Créer un fichier `index.js` dans le dossier `Firebase` avec les informations Firebase:
-
-   ```
-   VITE_FIREBASE_API_KEY=votre-api-key
-   VITE_FIREBASE_AUTH_DOMAIN=votre-auth-domain
-   VITE_FIREBASE_PROJECT_ID=votre-project-id
-   VITE_FIREBASE_STORAGE_BUCKET=votre-storage-bucket
-   VITE_FIREBASE_MESSAGING_SENDER_ID=votre-messaging-sender-id
-   VITE_FIREBASE_APP_ID=votre-app-id
-   VITE_FIREBASE_DATABASE_URL=votre-database-url
-   ```
-
-5. Démarrer le serveur de développement:
+3. Démarrer le serveur de développement:
 
    ```bash
    npm run dev
    ```
 
-6. L'application sera disponible à l'adresse: `http://localhost:5173/`
+4. L'application sera disponible à l'adresse: `http://localhost:5173/`
 
 ## Structure du projet
 
@@ -120,4 +101,4 @@ boardify/
 - L'application utilise Firebase pour l'authentification et le stockage des données, ce qui élimine le besoin d'un backend traditionnel
 - Le code est organisé selon le principe de responsabilité unique, avec des composants Vue.js modulaires
 - Le store Pinia centralise la gestion de l'état et la communication avec Firebase
-- La fonctionnalité de glisser-déposer est implémentée à l'aide de vue-draggable-next
+- La fonctionnalité de glisser-déposer est implémentée à l'aide de l'API native HTML5

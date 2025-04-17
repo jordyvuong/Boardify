@@ -82,7 +82,6 @@ const labels = {
   important: 'Important',
 }
 
-// Computed properties
 const hasLabels = computed(() => props.card.labels && Object.keys(props.card.labels).length > 0)
 
 const formattedDate = computed(() => {
