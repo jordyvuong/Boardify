@@ -24,7 +24,7 @@
         <div
           v-if="result.type === 'list'"
           class="result-content"
-          @click="navigateToList(result.boardId, result.id)"
+          @click="navigateToBoard(result.boardId, result.id)"
         >
           <h3 class="result-title">{{ result.title }}</h3>
         </div>
@@ -32,7 +32,7 @@
         <!-- Affichage de la car -->
         <div v-if="result.type === 'card'" 
         class="result-content"
-        @click="navigateToList(result.boardId, result.id)">
+        @click="navigateToBoard(result.boardId, result.id)">
           <h3 class="result-title">{{ result.title }}</h3>
           <p class="result-description">{{ result.description || 'Pas de description' }}</p> <!-- Afficher la description -->
         </div>
@@ -48,7 +48,7 @@
 <script>
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { searchItems } from '../stores/boards' // Importer la fonction de recherche
+import { searchItems } from '../stores/boards' 
 
 export default {
   setup() {
@@ -86,30 +86,20 @@ export default {
       router.push(`/boards/${boardId}`)
     }
 
-    // Fonction de navigation vers la carte
-    const navigateToList = (boardId, cardId) => {
-      console.log(`Navigating to board: ${boardId}, card: ${cardId}`) // Log pour déboguer
-      if (!boardId) {
-        console.error('boardId is undefined!')
-        return // Ne pas naviguer si boardId est undefined
-      }
-      router.push(`/boards/${boardId}`)
-    }
+
+    
 
     // Obtenir la couleur de fond du tableau (si elle existe)
     const getBoardBackgroundColor = (result) => {
   if (result.type === 'board') {
     return result.backgroundColor || '#0079BF';
   } else if (result.type === 'list' || result.type === 'card') {
-    // Utiliser d'abord la couleur propre de l'élément si elle existe
-    // Sinon, utiliser la couleur du tableau parent 
-    // Si aucune des deux n'est disponible, utiliser la couleur par défaut
     return result.backgroundColor || result.boardBackgroundColor || '#0079BF';
   }
   return '#0079BF'; // Couleur par défaut
 }
 
-    return { searchQuery, results, error, navigateToBoard, navigateToList, getBoardBackgroundColor }
+    return { searchQuery, results, error, navigateToBoard, getBoardBackgroundColor }
   },
 }
 </script>
